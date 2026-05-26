@@ -6,17 +6,23 @@ from typing import Optional
 
 import node_registry_pb2 as pb2
 import node_registry_pb2_grpc as pb2_grpc
+import time
 
 GRPC_HOST = os.environ.get("GRPC_HOST", "grpc-server")
 GRPC_PORT = os.environ.get("GRPC_PORT", "50051")
 
 app = FastAPI()
 
-
 def get_stub():
-    channel = grpc.insecure_channel(f"{GRPC_HOST}:{GRPC_PORT}")
-    return pb2_grpc.NodeRegistryStub(channel)
-
+    address = f"{GRPC_HOST}:{GRPC_PORT}"
+    for attempt in range(10):
+        try:
+            channel = grpc.insecure_channel(address)
+            grpc.channel_ready_future(channel).result(timeout=3)
+            return pb2_grpc.NodeRegistryStub(channel)
+        except grpc.FutureTimeoutError:
+            time.sleep(2)
+    raise RuntimeError(f"Cannot connect to gRPC server at {address}")
 
 class NodeCreate(BaseModel):
     name: str
